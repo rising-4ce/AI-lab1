@@ -6,7 +6,7 @@ public class PathNode //: MonoBehaviour
 {
     public bool walkable;           //  Свободна для перемещения
     public Vector3 worldPosition;   //  Позиция в глобальных координатах
-    private GameObject objPrefab;   //  Шаблон объекта
+    private readonly GameObject objPrefab;   //  Шаблон объекта
     public GameObject body;         //  Объект для отрисовки
     
     private PathNode parentNode = null;               //  откуда пришли
@@ -20,16 +20,15 @@ public class PathNode //: MonoBehaviour
         set => SetParent(value);
     }
 
-    private float distance = float.PositiveInfinity;  //  расстояние от начальной вершины
-
     /// <summary>
     /// Расстояние от начальной вершины до текущей (+infinity если ещё не развёртывали)
     /// </summary>
     public float Distance
     {
-        get => distance;
-        set => distance = value;
+        get => Distance1;
+        set => Distance1 = value;
     }
+    public float Distance1 { get; set; } = float.PositiveInfinity;
 
     /// <summary>
     /// Устанавливаем родителя и обновляем расстояние от него до текущей вершины. Неоптимально - дважды расстояние считается
@@ -41,9 +40,9 @@ public class PathNode //: MonoBehaviour
         parentNode = parent;
         //  Вычисляем расстояние
         if (parent != null)
-            distance = parent.Distance + Vector3.Distance(body.transform.position, parent.body.transform.position);
+            Distance1 = parent.Distance + Vector3.Distance(body.transform.position, parent.body.transform.position);
         else
-            distance = float.PositiveInfinity;
+            Distance1 = float.PositiveInfinity;
     }
 
     /// <summary>
@@ -70,20 +69,13 @@ public class PathNode //: MonoBehaviour
     {
         return Vector3.Distance(a.body.transform.position, b.body.transform.position) + 40 * Mathf.Abs(a.body.transform.position.y - b.body.transform.position.y);
     }
-    
+
     /// <summary>
-    /// Подсветить вершину - перекрасить в красный
+    /// Перекрасить вершину в указанный цвет
     /// </summary>
-    public void Illuminate()
+    public void Illuminate(Color color)
     {
-        body.GetComponent<Renderer>().material.color = Color.red;
+        body.GetComponent<Renderer>().material.color = color;
     }
     
-    /// <summary>
-    /// Снять подсветку с вершины - перекрасить в синий
-    /// </summary>
-    public void Fade()
-    {
-        body.GetComponent<Renderer>().material.color = Color.blue;
-    }
 }

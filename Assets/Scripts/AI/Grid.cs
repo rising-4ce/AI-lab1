@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Assets.Scripts.AI;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -24,15 +25,13 @@ public class Grid : MonoBehaviour
         foreach (PathNode node in grid)
         {
             //  Пока что считаем все вершины проходимыми, без учёта препятствий
-            node.walkable = true;
-            /*node.walkable = !Physics.CheckSphere(node.body.transform.position, 1);
+            node.walkable = !(Physics.CheckSphere(node.body.transform.position, 2));
             if (node.walkable)
-                node.Fade();
+                node.Illuminate(Color.blue);
             else
             {
-                node.Illuminate();
-                Debug.Log("Not walkable!");
-            }*/
+                node.Illuminate(Color.red);
+            }
         }
     }
 
@@ -40,6 +39,7 @@ public class Grid : MonoBehaviour
     // Метод вызывается однократно перед отрисовкой первого кадра
     void Start()
     {
+        Cursor.visible = false;
         //  Создаём сетку узлов для навигации - адаптивную, под размер ландшафта
         Vector3 terrainSize = landscape.terrainData.bounds.size;
         int sizeX = (int)(terrainSize.x / gridDelta);
@@ -49,12 +49,15 @@ public class Grid : MonoBehaviour
         for (int x = 0; x < sizeX; ++x)
             for (int z = 0; z < sizeZ; ++z)
             {
-                float height = landscape.terrainData.GetHeight(gridDelta * x / 2, gridDelta * z / 2);
-                Vector3 position = new Vector3(x*gridDelta, 25 + height, z*gridDelta);
-                grid[x, z] = new PathNode(nodeModel, false, position);
-                grid[x, z].ParentNode = null;
-                grid[x, z].Fade();
+                Vector3 position = new Vector3(x * gridDelta, 0, z * gridDelta);
+                position.y = landscape.SampleHeight(position) + 10;
+                grid[x, z] = new PathNode(nodeModel, false, position)
+                {
+                    ParentNode = null
+                };
+                grid[x, z].Illuminate(Color.blue);
             }
+
     }
     /// <summary>
     /// Получение списка соседних узлов для вершины сетки
@@ -76,12 +79,12 @@ public class Grid : MonoBehaviour
     /// </summary>
     /// <param name="startNode">Координаты начального узла пути (индексы элемента в массиве grid)</param>
     /// <param name="finishNode">Координаты конечного узла пути (индексы элемента в массиве grid)</param>
-    void calculatePath(Vector2Int startNode, Vector2Int finishNode)
+    void CalculatePath(Vector2Int startNode, Vector2Int finishNode)
     {
         //  Очищаем все узлы - сбрасываем отметку родителя, снимаем подсветку
         foreach (var node in grid)
         {
-            node.Fade();
+            node.Illuminate(Color.blue);
             node.ParentNode = null;
         }
         
@@ -119,7 +122,55 @@ public class Grid : MonoBehaviour
         var pathElem = grid[finishNode.x, finishNode.y];
         while(pathElem != null)
         {
-            pathElem.Illuminate();
+            pathElem.Illuminate(Color.green);
+            pathElem = pathElem.ParentNode;
+        }
+    }
+    void CalculatePathAStar(Vector2Int startNode, Vector2Int finishNode)
+    {
+        //  Очищаем все узлы - сбрасываем отметку родителя, снимаем подсветку
+        foreach (var node in grid)
+        {
+            node.Illuminate(Color.blue);
+            node.ParentNode = null;
+        }
+
+        CheckWalkableNodes();
+        PathNode start = grid[startNode.x, startNode.y];
+
+        //  Начальную вершину отдельно изменяем
+        start.ParentNode = null;
+        start.Distance = 0;
+
+        //  Очередь вершин в обработке - в A* необходимо заменить на очередь с приоритетом
+        BinaryHeap<Vector2Int> nodes = new BinaryHeap<Vector2Int>();
+        //  Начальную вершину помещаем в очередь
+        nodes.Enqueue(startNode, 0);
+        //  Пока не обработаны все вершины (очередь содержит узлы для обработки)
+        while (nodes.Count != 0)
+        {
+            Vector2Int current = nodes.Dequeue();
+            //  Если достали целевую - можно заканчивать (это верно и для A*)
+            if (current == finishNode) break;
+            //  Получаем список соседей
+            var neighbours = GetNeighbours(current);
+            foreach (var node in neighbours)
+            {
+                if (!grid[node.x, node.y].walkable)
+                    continue;
+                var estimate = grid[current.x, current.y].Distance + PathNode.Dist(grid[node.x, node.y], grid[current.x, current.y]);
+                if (grid[node.x, node.y].walkable && grid[node.x, node.y].Distance > estimate)
+                {
+                    grid[node.x, node.y].ParentNode = grid[current.x, current.y];
+                    nodes.Enqueue(node, estimate);
+                }
+            }
+        }
+        //  Восстанавливаем путь от целевой к стартовой
+        var pathElem = grid[finishNode.x, finishNode.y];
+        while (pathElem != null)
+        {
+            pathElem.Illuminate(Color.green);
             pathElem = pathElem.ParentNode;
         }
     }
@@ -129,8 +180,8 @@ public class Grid : MonoBehaviour
     {
         //  Чтобы не вызывать этот метод каждый кадр, устанавливаем интервал вызова в 1000 кадров
         if (Time.frameCount < updateAtFrame) return;
-        updateAtFrame = Time.frameCount + 1000;
-
-        calculatePath(new Vector2Int(0, 0), new Vector2Int(grid.GetLength(0)-1, grid.GetLength(1)-1));
+        updateAtFrame = Time.frameCount + 60;
+        CalculatePathAStar(new Vector2Int(0, 0), new Vector2Int(grid.GetLength(0) - 1, grid.GetLength(1) - 1));
+        // calculatePath(new Vector2Int(0, 0), new Vector2Int(grid.GetLength(0)-1, grid.GetLength(1)-1));
     }
 }
